@@ -1,10 +1,11 @@
 import io
 import time
-import google.generativeai as genai
+
+from google.genai import types, errors
 from PIL import Image
 
+from client import get_client, MODEL
 
-MODEL = "gemini-2.5-flash"
 BLEND_PROMPT = (
     "Fusiona estas dos imágenes en una sola imagen coherente y visualmente armoniosa. "
     "Combina los elementos visuales de ambas de manera natural."
@@ -15,28 +16,27 @@ def blend_images(
     image_a: Image.Image, image_b: Image.Image
 ) -> tuple[Image.Image, float]:
     start = time.time()
+    try:
+        response = get_client().models.generate_content(
+            model=MODEL,
+            contents=[
+                BLEND_PROMPT,
+                types.Part.from_bytes(data=_to_bytes(image_a), mime_type="image/png"),
+                types.Part.from_bytes(data=_to_bytes(image_b), mime_type="image/png"),
+            ],
+            config=types.GenerateContentConfig(
+                response_modalities=["TEXT", "IMAGE"],
+                safety_settings=[],
+            ),
+        )
+    except errors.APIError as e:
+        raise RuntimeError(f"[Step 3] Error de API {e.code}: {e.message}") from e
 
-    bytes_a = _image_to_bytes(image_a)
-    bytes_b = _image_to_bytes(image_b)
-
-    model = genai.GenerativeModel(MODEL)
-    response = model.generate_content(
-        [
-            BLEND_PROMPT,
-            {"mime_type": "image/png", "data": bytes_a},
-            {"mime_type": "image/png", "data": bytes_b},
-        ],
-        generation_config=genai.GenerationConfig(
-            response_modalities=["IMAGE"]
-        ),
-    )
-
-    blended_bytes = _extract_image_bytes(response)
-    elapsed = round(time.time() - start, 2)
-    return Image.open(io.BytesIO(blended_bytes)), elapsed
+    image_bytes = _extract_image_bytes(response)
+    return Image.open(io.BytesIO(image_bytes)), round(time.time() - start, 2)
 
 
-def _image_to_bytes(image: Image.Image) -> bytes:
+def _to_bytes(image: Image.Image) -> bytes:
     buf = io.BytesIO()
     image.save(buf, format="PNG")
     return buf.getvalue()

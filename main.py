@@ -1,11 +1,11 @@
 import argparse
-import os
 import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
-import google.generativeai as genai
+from PIL import Image
 
+from client import get_client
 from steps import generate_image, edit_image, blend_images
 from report import generate_report
 
@@ -16,11 +16,11 @@ OUTPUTS.mkdir(exist_ok=True)
 
 
 def _configure_api():
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        print("Error: GEMINI_API_KEY no está configurada. Copia .env.example a .env y agrega tu key.")
+    try:
+        get_client()
+    except EnvironmentError as e:
+        print(f"Error: {e}")
         sys.exit(1)
-    genai.configure(api_key=api_key)
 
 
 def _parse_args():
@@ -77,7 +77,6 @@ def run_full(args) -> dict:
     if args.referencia:
         print(f"\n[Step 3] Fusionando con referencia: {args.referencia}")
         try:
-            from PIL import Image
             ref_img = Image.open(args.referencia)
             img_blended, t3 = blend_images(img_edited, ref_img)
             path3 = OUTPUTS / "03_blended.png"
@@ -112,7 +111,6 @@ def run_solo(args) -> dict:
         if not src.exists():
             print(f"Error: No se encontró {src}. Ejecuta primero --solo generate.")
             sys.exit(1)
-        from PIL import Image
         img_src = Image.open(src)
         print(f"\n[Step 2] Editando imagen: \"{args.edit}\"")
         img, t = edit_image(img_src, args.edit)
@@ -129,7 +127,6 @@ def run_solo(args) -> dict:
         if not src.exists():
             print(f"Error: No se encontró {src}. Ejecuta primero generate y edit.")
             sys.exit(1)
-        from PIL import Image
         img_src = Image.open(src)
         ref_img = Image.open(args.referencia)
         print(f"\n[Step 3] Fusionando con referencia: {args.referencia}")

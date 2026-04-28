@@ -1,34 +1,34 @@
 import io
 import time
-import google.generativeai as genai
+
+from google.genai import types, errors
 from PIL import Image
 
-
-MODEL = "gemini-2.5-flash-preview-05-20"
+from client import get_client, MODEL
 
 
 def edit_image(image: Image.Image, instruccion: str) -> tuple[Image.Image, float]:
     start = time.time()
+    try:
+        response = get_client().models.generate_content(
+            model=MODEL,
+            contents=[
+                instruccion,
+                types.Part.from_bytes(data=_to_bytes(image), mime_type="image/png"),
+            ],
+            config=types.GenerateContentConfig(
+                response_modalities=["TEXT", "IMAGE"],
+                safety_settings=[],
+            ),
+        )
+    except errors.APIError as e:
+        raise RuntimeError(f"[Step 2] Error de API {e.code}: {e.message}") from e
 
-    img_bytes = _image_to_bytes(image)
-
-    model = genai.GenerativeModel(MODEL)
-    response = model.generate_content(
-        [
-            instruccion,
-            {"mime_type": "image/png", "data": img_bytes},
-        ],
-        generation_config=genai.GenerationConfig(
-            response_modalities=["IMAGE"]
-        ),
-    )
-
-    edited_bytes = _extract_image_bytes(response)
-    elapsed = round(time.time() - start, 2)
-    return Image.open(io.BytesIO(edited_bytes)), elapsed
+    image_bytes = _extract_image_bytes(response)
+    return Image.open(io.BytesIO(image_bytes)), round(time.time() - start, 2)
 
 
-def _image_to_bytes(image: Image.Image) -> bytes:
+def _to_bytes(image: Image.Image) -> bytes:
     buf = io.BytesIO()
     image.save(buf, format="PNG")
     return buf.getvalue()
